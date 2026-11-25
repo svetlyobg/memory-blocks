@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="bg">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Memory Blocks</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #c0c0c0; font-family: "MS Sans Serif", Tahoma, Arial, sans-serif; font-size: 14px;
+         display: flex; justify-content: center; padding: 20px 8px; user-select: none;
+         touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+  @media (max-width: 600px) { body { padding: 6px 4px; } }
+  .window { border: 2px solid #000; background: #fff; box-shadow: 4px 4px 0 rgba(0,0,0,.4); }
+  .title { background: #0000a8; color: #fff; text-align: center; font-weight: bold; padding: 3px 8px; }
+  .menubar { display: flex; background: #fff; border-bottom: 1px solid #000; position: relative; }
+  .menu { position: relative; padding: 3px 10px; cursor: pointer; }
+  .menu:hover, .menu.open { background: #0000a8; color: #fff; }
+  .dropdown { display: none; position: absolute; top: 100%; left: 0; background: #fff; color: #000; border: 1px solid #000;
+              min-width: 200px; z-index: 10; box-shadow: 2px 2px 0 rgba(0,0,0,.4); }
+  .menu.open .dropdown { display: block; }
+  .dropdown div { padding: 4px 14px; white-space: nowrap; }
+  .dropdown div:hover { background: #0000a8; color: #fff; }
+  .dropdown .check::before { content: "✓ "; }
+  .dropdown div:not(.check) { padding-left: 28px; }
+  .dropdown .check { padding-left: 14px !important; }
+  .board { --cell: 54px; --gap: 12px; --sh: calc(var(--cell) * .09);
+           background: #00e5ee; padding: var(--gap) var(--gap) var(--gap) calc(var(--gap) + var(--sh));
+           display: grid; justify-content: center; gap: var(--gap); }
+  .cell { width: var(--cell); height: var(--cell); position: relative; cursor: pointer; }
+  .block { position: absolute; inset: 0; background: #ffff00; border: 2px solid #000;
+           box-shadow: calc(-1 * var(--sh)) var(--sh) 0 #a8a800, calc(-1 * var(--sh)) var(--sh) 0 1px #000; }
+  .block::after { content: ""; position: absolute; inset: var(--sh); border: 2px solid #fff200; border-color: #ffff9a #c8c800 #c8c800 #ffff9a; }
+  .cell:active .block { transform: translate(-2px, 2px); }
+  .card { position: absolute; inset: 0; background: #fff; border: 2px solid #000; display: none;
+          align-items: center; justify-content: center; }
+  .card svg { width: calc(var(--cell) * .74); height: calc(var(--cell) * .74); }
+  .cell.up .block, .cell.peek .block { display: none; }
+  .cell.up .card, .cell.peek .card { display: flex; }
+  .cell.done { cursor: default; }
+  @keyframes vanish { to { opacity: 0; visibility: hidden; } }
+  body.hide-pairs .cell.done { animation: vanish .3s .5s forwards; pointer-events: none; }
+  .status { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 4px 16px; padding: 4px 12px; border-top: 1px solid #000; background: #fff; }
+  .status button { font: inherit; padding: 1px 10px; cursor: pointer; }
+  .status button:disabled { cursor: default; }
+  .win { display: none; position: absolute; inset: 0; background: rgba(0,0,0,.45); align-items: center; justify-content: center; }
+  .win.show { display: flex; }
+  .win div { background: #fff; border: 2px solid #000; padding: 18px 26px; text-align: center; max-width: 90%; }
+  .win button { margin-top: 10px; padding: 4px 18px; font: inherit; cursor: pointer; }
+  .wrap { position: relative; }
+</style>
+</head>
+<body>
+<div class="window">
+  <div class="title">Memory Blocks</div>
+  <div class="menubar" id="menubar">
+    <div class="menu" data-m="game">Игра
+      <div class="dropdown">
+        <div id="newGame">Нова игра</div>
+        <div id="soundToggle" class="check">Звук</div>
+        <div id="hideToggle" class="check">Изчезващи двойки</div>
+        <div id="previewToggle" class="check">Показване в началото</div>
+      </div>
+    </div>
+    <div class="menu" data-m="skill">Ниво
+      <div class="dropdown" id="levels"></div>
+    </div>
+    <div class="menu" data-m="help">Помощ
+      <div class="dropdown">
+        <div id="how">Как се играе</div>
+      </div>
+    </div>
+  </div>
+  <div class="wrap">
+    <div class="board" id="board"></div>
+    <div class="win" id="win"><div><b id="winText"></b><br><button id="again">Нова игра</button></div></div>
+  </div>
+  <div class="status">
+    <span>Време: <b id="time">0:00</b></span>
+    <span>IQ: <b id="iq">100</b></span>
+    <span>Отгатнати: <b id="found">0 / 0</b></span>
+    <button id="joker" disabled>Жокер: <b id="jokers">0</b></button>
+  </div>
+</div>
+
+<script>
+const LEVELS = [
+  { name: "Лесно (6×5)",   cols: 6,  rows: 5 },
+  { name: "Средно (8×6)",  cols: 8,  rows: 6 },
+  { name: "Трудно (10×6)", cols: 10, rows: 6 }
+];
+// 30 различни икони (прости SVG фигури)
+const COLORS = ["#e00","#00a","#080","#f80","#808","#088","#000","#a50","#f0a","#555"];
+const SHAPES = [
+  c => `<path d="M20 35 C2 22 5 6 15 6 C18 6 20 9 20 11 C20 9 22 6 25 6 C35 6 38 22 20 35Z" fill="${c}"/>`,           // сърце
+  c => `<circle cx="20" cy="20" r="15" fill="${c}"/>`,                                                               // кръг
+  c => `<rect x="6" y="6" width="28" height="28" fill="${c}"/>`,                                                     // квадрат
+  c => `<polygon points="20,4 37,35 3,35" fill="${c}"/>`,                                                            // триъгълник
+  c => `<polygon points="20,3 25,15 38,15 28,23 32,36 20,28 8,36 12,23 2,15 15,15" fill="${c}"/>`,                   // звезда
+  c => `<polygon points="20,3 37,20 20,37 3,20" fill="${c}"/>`,                                                      // ромб
+  c => `<path d="M17 4h6v13h13v6H23v13h-6V23H4v-6h13z" fill="${c}"/>`,                                               // кръст
+  c => `<rect x="4" y="4" width="32" height="32" rx="3" fill="${c}"/><rect x="10" y="4" width="20" height="12" fill="#fff"/><rect x="24" y="6" width="4" height="8" fill="${c}"/><rect x="10" y="22" width="20" height="14" fill="#fff"/>`, // дискета
+  c => `<circle cx="20" cy="20" r="15" fill="none" stroke="${c}" stroke-width="6"/>`,                                // пръстен
+  c => `<path d="M4 30 L20 8 L36 30Z M12 30 L24 14" fill="${c}"/>`                                                   // планина
+];
+const ICONS = [];
+for (let ci = 0; ci < COLORS.length; ci++)
+  for (let si = 0; si < SHAPES.length && ICONS.length < 30; si++)
+    if ((ci + si) % 3 === 0 || ICONS.length < 0) ICONS.push(SHAPES[si](COLORS[ci]));
+// гарантираме 30 различни
+let k = 0;
+for (let ci = 0; ICONS.length < 30; ci++)
+  for (let si = 0; si < SHAPES.length && ICONS.length < 30; si++) {
+    const s = SHAPES[si](COLORS[ci]);
+    if (!ICONS.includes(s)) ICONS.push(s);
+  }
+
+// --- звук (Web Audio, без външни файлове) ---
+let soundOn = true, actx = null;
+function tone(freq, start, dur, type = "sine", vol = 0.15) {
+  if (!soundOn) return;
+  actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+  if (actx.state === "suspended") actx.resume();
+  const t = actx.currentTime + start;
+  const o = actx.createOscillator(), g = actx.createGain();
+  o.type = type; o.frequency.setValueAtTime(freq, t);
+  g.gain.setValueAtTime(vol, t);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(g); g.connect(actx.destination);
+  o.start(t); o.stop(t + dur + 0.02);
+}
+const sfx = {
+  flip:  () => tone(700, 0, 0.06, "square", 0.08),
+  match: () => { tone(660, 0, 0.12, "triangle"); tone(880, 0.1, 0.2, "triangle"); },
+  miss:  () => { tone(220, 0, 0.18, "sawtooth", 0.1); tone(165, 0.12, 0.25, "sawtooth", 0.1); },
+  joker: () => [784, 988, 1175].forEach((f, i) => tone(f, i * 0.09, 0.15, "square", 0.07)),
+  win:   () => [523, 659, 784, 1047, 784, 1047].forEach((f, i) => tone(f, i * 0.14, 0.22, "triangle"))
+};
+
+let level = (() => {
+  try { const v = parseInt(localStorage.getItem("mb-level"), 10); return v >= 0 && v < LEVELS.length ? v : 0; }
+  catch { return 0; }
+})();
+let first = null, lock = false, pairs = 0, found = 0, timer = null, secs = 0, started = false;
+let jokerFound = 0;
+let iq = 100, streak = 0, jokers = 0, over = false, gid = 0, previewOn = true;
+const JOKER_EVERY = 5;
+const $ = id => document.getElementById(id);
+
+function fmtTime(s) { return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); }
+let boardCols = 6;
+// размер на плочките според екрана (за телефони и таблети)
+function fitBoard() {
+  const cells = LEVELS[level].cols * LEVELS[level].rows;
+  const cols = boardCols, rows = cells / cols;
+  const k = 0.22; // разстояние = 22% от плочката
+  const pad = window.innerWidth <= 600 ? 8 : 16;
+  const availW = document.documentElement.clientWidth - pad - 4;
+  const availH = window.innerHeight - pad - 100; // заглавие, меню, статус
+  let cell = Math.floor(availW / (cols + k * (cols + 1) + 0.09));
+  cell = Math.min(cell, Math.floor(availH / (rows + k * (rows + 1))));
+  cell = Math.max(26, Math.min(54, cell));
+  const board = $("board");
+  board.style.setProperty("--cell", cell + "px");
+  board.style.setProperty("--gap", Math.round(cell * k) + "px");
+  board.style.gridTemplateColumns = `repeat(${cols}, ${cell}px)`;
+}
+let resizeT;
+window.addEventListener("resize", () => { clearTimeout(resizeT); resizeT = setTimeout(fitBoard, 100); });
+
+function total() { return LEVELS[level].cols * LEVELS[level].rows / 2; }
+function updateHUD() {
+  $("iq").textContent = iq;
+  $("found").textContent = `${found} / ${total()}`;
+  $("jokers").textContent = jokers;
+  $("joker").disabled = jokers < 1 || lock || over;
+}
+function setLock(v) { lock = v; updateHUD(); }
+function titleFor(ratio) {
+  if (ratio >= 0.75) return "Гений";
+  if (ratio >= 0.55) return "Отлична памет";
+  if (ratio >= 0.4)  return "Добра памет";
+  if (ratio >= 0.28) return "Средна памет";
+  return "Златна рибка";
+}
+
+function buildMenu() {
+  const box = $("levels");
+  box.innerHTML = "";
+  LEVELS.forEach((l, i) => {
+    const d = document.createElement("div");
+    d.textContent = l.name;
+    if (i === level) d.className = "check";
+    d.onclick = () => {
+      level = i;
+      try { localStorage.setItem("mb-level", i); } catch {}
+      buildMenu(); newGame();
+    };
+    box.appendChild(d);
+  });
+}
+
+function shuffle(a) {
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function newGame() {
+  clearInterval(timer);
+  gid++;
+  const g = gid;
+  secs = 0; pairs = 0; found = 0; first = null; started = false;
+  iq = 100; streak = 0; jokers = 0; over = false; jokerFound = 0;
+  $("time").textContent = fmtTime(0);
+  $("win").classList.remove("show");
+  const { cols, rows } = LEVELS[level];
+  const n = cols * rows / 2;
+  const ids = shuffle([...Array(ICONS.length).keys()]).slice(0, n);
+  const deck = shuffle([...ids, ...ids]);
+  const board = $("board");
+  // на телефон в портрет: повече редове, по-малко колони
+  boardCols = (window.innerHeight > window.innerWidth && cols > rows) ? rows : cols;
+  board.innerHTML = "";
+  deck.forEach(id => {
+    const c = document.createElement("div");
+    c.className = "cell"; c.dataset.id = id;
+    c.innerHTML = `<div class="block"></div><div class="card"><svg viewBox="0 0 40 40">${ICONS[id]}</svg></div>`;
+    c.onclick = () => flip(c);
+    board.appendChild(c);
+  });
+  fitBoard();
+  // показване на всички плочки в началото
+  if (previewOn) {
+    const cells = [...board.children];
+    cells.forEach(c => c.classList.add("peek"));
+    setLock(true);
+    setTimeout(() => {
+      if (g !== gid) return;
+      cells.forEach(c => c.classList.remove("peek"));
+      setLock(false);
+    }, level === 0 ? 3000 : 4000);
+  } else {
+    setLock(false);
+  }
+}
+
+function checkWin() {
+  if (found !== total()) return false;
+  over = true;
+  clearInterval(timer);
+  setTimeout(sfx.win, 150);
+  const ratio = pairs ? Math.min(1, (found - jokerFound) / pairs) : 0;
+  $("winText").innerHTML = `Браво! Намери всички двойки за ${fmtTime(secs)} мин. с ${pairs} опита.<br>IQ: ${iq} — ${titleFor(ratio)}`;
+  $("win").classList.add("show");
+  return true;
+}
+
+// жокер: намира случайна двойка от още неотгатнатите
+function useJoker() {
+  if (lock || over || jokers < 1) return;
+  const byId = {};
+  document.querySelectorAll(".cell:not(.done)").forEach(c => (byId[c.dataset.id] ??= []).push(c));
+  const keys = Object.keys(byId);
+  if (!keys.length) return;
+  jokers--;
+  const g = gid;
+  const pair = byId[keys[Math.floor(Math.random() * keys.length)]];
+  pair.forEach(c => c.classList.add("peek"));
+  sfx.joker();
+  setLock(true);
+  setTimeout(() => {
+    if (g !== gid) return;
+    pair.forEach(c => { c.classList.remove("peek", "up"); c.classList.add("done"); });
+    if (pair.includes(first)) first = null;
+    found++; jokerFound++;
+    sfx.match();
+    if (!checkWin()) setLock(false); else updateHUD();
+  }, 1200);
+}
+
+function flip(c) {
+  if (lock || over || c.classList.contains("up") || c.classList.contains("done")) return;
+  if (!started) { started = true; timer = setInterval(() => $("time").textContent = fmtTime(++secs), 1000); }
+  c.classList.add("up");
+  sfx.flip();
+  if (!first) { first = c; return; }
+  pairs++;
+  if (first.dataset.id === c.dataset.id) {
+    first.classList.add("done"); c.classList.add("done");
+    first = null; found++; streak++;
+    iq += 10 + 2 * (streak - 1);
+    const all = found === total();
+    if (!all && found % JOKER_EVERY === 0) {
+      jokers++;
+      setTimeout(sfx.joker, 450);
+    } else if (!all) {
+      setTimeout(sfx.match, 120);
+    }
+    checkWin();
+    updateHUD();
+  } else {
+    // грешка: -3, и още -5 за всяка карта, която вече си виждал
+    let pen = 3;
+    [first, c].forEach(x => { if (x.dataset.seen) pen += 5; x.dataset.seen = "1"; });
+    iq = Math.max(0, iq - pen);
+    streak = 0;
+    setLock(true);
+    setTimeout(sfx.miss, 250);
+    const a = first, g = gid; first = null;
+    setTimeout(() => {
+      if (g !== gid) return;
+      a.classList.remove("up"); c.classList.remove("up"); setLock(false);
+    }, 900);
+  }
+}
+
+// менюта
+document.querySelectorAll(".menu").forEach(m => {
+  m.addEventListener("click", e => {
+    const wasOpen = m.classList.contains("open");
+    document.querySelectorAll(".menu").forEach(x => x.classList.remove("open"));
+    if (!wasOpen) m.classList.add("open");
+    e.stopPropagation();
+  });
+});
+document.addEventListener("click", () => document.querySelectorAll(".menu").forEach(x => x.classList.remove("open")));
+$("newGame").onclick = newGame;
+// опции, запомнени в браузъра (по подразбиране всички са включени)
+function loadOpt(key) {
+  try { return localStorage.getItem("mb-" + key) !== "0"; } catch { return true; }
+}
+function saveOpt(key, on) {
+  try { localStorage.setItem("mb-" + key, on ? "1" : "0"); } catch {}
+}
+function setupToggle(id, key, apply) {
+  let on = loadOpt(key);
+  apply(on);
+  $(id).classList.toggle("check", on);
+  $(id).onclick = () => {
+    on = !on;
+    apply(on);
+    saveOpt(key, on);
+    $(id).classList.toggle("check", on);
+  };
+}
+setupToggle("soundToggle",   "sound",   on => { soundOn = on; });
+setupToggle("hideToggle",    "hide",    on => document.body.classList.toggle("hide-pairs", on));
+setupToggle("previewToggle", "preview", on => { previewOn = on; });
+$("joker").onclick = useJoker;
+$("again").onclick = newGame;
+$("how").onclick = () => alert("Обръщай по два блока. Ако картинките съвпадат, двойката е отгатната.\n\nВ началото всички плочки се показват за няколко секунди — запомни ги!\n\nIQ започва от 100. Верен ход дава точки (повече при серия), а грешен отнема точки — най-много, ако обърнеш карта, която вече си виждал.\n\nНа всеки 5 отгатнати двойки получаваш Жокер, който сам намира една случайна двойка вместо теб.");
+
+buildMenu();
+newGame();
+</script>
+</body>
+</html>
