@@ -54,41 +54,74 @@
 <div class="window">
   <div class="title">Memory Blocks<span id="countdown"></span></div>
   <div class="menubar" id="menubar">
-    <div class="menu" data-m="game">Игра
+    <div class="menu" data-m="game"><span data-i18n="game">Игра</span>
       <div class="dropdown">
-        <div id="newGame">Нова игра</div>
-        <div id="soundToggle" class="check">Звук</div>
-        <div id="hideToggle" class="check">Изчезващи двойки</div>
-        <div id="previewToggle" class="check">Показване в началото</div>
+        <div id="newGame" data-i18n="newGame">Нова игра</div>
+        <div id="soundToggle" class="check" data-i18n="sound">Звук</div>
+        <div id="hideToggle" class="check" data-i18n="hide">Изчезващи двойки</div>
+        <div id="previewToggle" class="check" data-i18n="preview">Показване в началото</div>
       </div>
     </div>
-    <div class="menu" data-m="skill">Ниво
+    <div class="menu" data-m="skill"><span data-i18n="level">Ниво</span>
       <div class="dropdown" id="levels"></div>
     </div>
-    <div class="menu" data-m="help">Помощ
+    <div class="menu" data-m="lang"><span data-i18n="language">Език</span>
       <div class="dropdown">
-        <div id="how">Как се играе</div>
+        <div id="lang-bg">Български</div>
+        <div id="lang-en">English</div>
+      </div>
+    </div>
+    <div class="menu" data-m="help"><span data-i18n="help">Помощ</span>
+      <div class="dropdown">
+        <div id="how" data-i18n="how">Как се играе</div>
       </div>
     </div>
   </div>
   <div class="wrap">
     <div class="board" id="board"></div>
-    <div class="win" id="win"><div><b id="winText"></b><br><button id="again">Нова игра</button></div></div>
+    <div class="win" id="win"><div><b id="winText"></b><br><button id="again" data-i18n="newGame">Нова игра</button></div></div>
   </div>
   <div class="status">
-    <span>Време: <b id="time">0:00</b></span>
+    <span><span data-i18n="time">Време</span>: <b id="time">0:00</b></span>
     <span>IQ: <b id="iq">100</b></span>
-    <span>Отгатнати: <b id="found">0 / 0</b></span>
-    <button id="joker" disabled>Жокер: <b id="jokers">0</b></button>
+    <span><span data-i18n="found">Отгатнати</span>: <b id="found">0 / 0</b></span>
+    <button id="joker" disabled><span data-i18n="joker">Жокер</span>: <b id="jokers">0</b></button>
   </div>
 </div>
 
 <script>
 const LEVELS = [
-  { name: "Лесно (6×5)",   cols: 6,  rows: 5, preview: 7 },
-  { name: "Средно (8×6)",  cols: 8,  rows: 6, preview: 9 },
-  { name: "Трудно (10×6)", cols: 10, rows: 6, preview: 11 }
+  { key: "easy",   cols: 6,  rows: 5, preview: 7 },
+  { key: "medium", cols: 8,  rows: 6, preview: 9 },
+  { key: "hard",   cols: 10, rows: 6, preview: 11 }
 ];
+
+// --- преводи ---
+const I18N = {
+  bg: {
+    game: "Игра", newGame: "Нова игра", sound: "Звук", hide: "Изчезващи двойки", preview: "Показване в началото",
+    level: "Ниво", easy: "Лесно", medium: "Средно", hard: "Трудно",
+    language: "Език", help: "Помощ", how: "Как се играе",
+    time: "Време", found: "Отгатнати", joker: "Жокер",
+    countdown: s => ` — Запомни! ${s} сек.`,
+    win: (t, n, iq, title) => `Браво! Намери всички двойки за ${t} мин. с ${n} опита.<br>IQ: ${iq} — ${title}`,
+    titles: ["Гений", "Отлична памет", "Добра памет", "Средна памет", "Златна рибка"],
+    helpText: "Обръщай по два блока. Ако картинките съвпадат, двойката е отгатната.\n\nВ началото всички плочки се показват за няколко секунди — запомни ги!\n\nIQ започва от 100. Верен ход дава точки (повече при серия), а грешен отнема точки — най-много, ако обърнеш карта, която вече си виждал.\n\nНа всеки 5 отгатнати двойки получаваш Жокер, който сам намира една случайна двойка вместо теб."
+  },
+  en: {
+    game: "Game", newGame: "New game", sound: "Sound", hide: "Vanishing pairs", preview: "Show tiles at start",
+    level: "Skill", easy: "Easy", medium: "Medium", hard: "Hard",
+    language: "Language", help: "Help", how: "How to play",
+    time: "Time", found: "Found", joker: "Joker",
+    countdown: s => ` — Memorize! ${s} s`,
+    win: (t, n, iq, title) => `Well done! You found all pairs in ${t} min. with ${n} tries.<br>IQ: ${iq} — ${title}`,
+    titles: ["Genius", "Excellent memory", "Good memory", "Average memory", "Goldfish"],
+    helpText: "Flip two blocks at a time. If the pictures match, the pair is found.\n\nAt the start all tiles are shown for a few seconds — memorize them!\n\nIQ starts at 100. A correct move earns points (more for a streak), a wrong one costs points — most of all if you flip a card you have already seen.\n\nEvery 5 pairs found earn you a Joker, which finds a random pair for you."
+  }
+};
+let lang = (() => { try { return localStorage.getItem("mb-lang") === "en" ? "en" : "bg"; } catch { return "bg"; } })();
+const T = () => I18N[lang];
+function levelName(i) { const l = LEVELS[i]; return `${T()[l.key]} (${l.cols}×${l.rows})`; }
 // 30 различни икони (прости SVG фигури)
 const COLORS = ["#e00","#00a","#080","#f80","#808","#088","#000","#a50","#f0a","#555"];
 const SHAPES = [
@@ -169,7 +202,7 @@ let resizeT;
 window.addEventListener("resize", () => { clearTimeout(resizeT); resizeT = setTimeout(fitBoard, 100); });
 
 let cdTimer = null;
-function showCountdown(s) { $("countdown").textContent = s > 0 ? ` — Запомни! ${s} сек.` : ""; }
+function showCountdown(s) { $("countdown").textContent = s > 0 ? T().countdown(s) : ""; }
 function total() { return LEVELS[level].cols * LEVELS[level].rows / 2; }
 function updateHUD() {
   $("iq").textContent = iq;
@@ -179,11 +212,12 @@ function updateHUD() {
 }
 function setLock(v) { lock = v; updateHUD(); }
 function titleFor(ratio) {
-  if (ratio >= 0.75) return "Гений";
-  if (ratio >= 0.55) return "Отлична памет";
-  if (ratio >= 0.4)  return "Добра памет";
-  if (ratio >= 0.28) return "Средна памет";
-  return "Златна рибка";
+  const t = T().titles;
+  if (ratio >= 0.75) return t[0];
+  if (ratio >= 0.55) return t[1];
+  if (ratio >= 0.4)  return t[2];
+  if (ratio >= 0.28) return t[3];
+  return t[4];
 }
 
 function buildMenu() {
@@ -191,7 +225,7 @@ function buildMenu() {
   box.innerHTML = "";
   LEVELS.forEach((l, i) => {
     const d = document.createElement("div");
-    d.textContent = l.name;
+    d.textContent = levelName(i);
     if (i === level) d.className = "check";
     d.onclick = () => {
       level = i;
@@ -267,7 +301,7 @@ function checkWin() {
   clearInterval(timer);
   setTimeout(sfx.win, 150);
   const ratio = pairs ? Math.min(1, (found - jokerFound) / pairs) : 0;
-  $("winText").innerHTML = `Браво! Намери всички двойки за ${fmtTime(secs)} мин. с ${pairs} опита.<br>IQ: ${iq} — ${titleFor(ratio)}`;
+  $("winText").innerHTML = T().win(fmtTime(secs), pairs, iq, titleFor(ratio));
   $("win").classList.add("show");
   return true;
 }
@@ -365,9 +399,27 @@ setupToggle("hideToggle",    "hide",    on => document.body.classList.toggle("hi
 setupToggle("previewToggle", "preview", on => { previewOn = on; });
 $("joker").onclick = useJoker;
 $("again").onclick = newGame;
-$("how").onclick = () => alert("Обръщай по два блока. Ако картинките съвпадат, двойката е отгатната.\n\nВ началото всички плочки се показват за няколко секунди — запомни ги!\n\nIQ започва от 100. Верен ход дава точки (повече при серия), а грешен отнема точки — най-много, ако обърнеш карта, която вече си виждал.\n\nНа всеки 5 отгатнати двойки получаваш Жокер, който сам намира една случайна двойка вместо теб.");
+$("how").onclick = () => alert(T().helpText);
 
-buildMenu();
+function applyLang() {
+  document.documentElement.lang = lang;
+  document.querySelectorAll("[data-i18n]").forEach(el => { el.textContent = T()[el.dataset.i18n]; });
+  $("lang-bg").classList.toggle("check", lang === "bg");
+  $("lang-en").classList.toggle("check", lang === "en");
+  buildMenu();
+}
+function setLang(l) {
+  lang = l;
+  try { localStorage.setItem("mb-lang", l); } catch {}
+  applyLang();
+  // обнови текстове, които зависят от състоянието
+  if ($("countdown").textContent) showCountdown(parseInt($("countdown").textContent.match(/\d+/)[0], 10));
+  if (over) $("winText").innerHTML = T().win(fmtTime(secs), pairs, iq, titleFor(pairs ? Math.min(1, (found - jokerFound) / pairs) : 0));
+}
+$("lang-bg").onclick = () => setLang("bg");
+$("lang-en").onclick = () => setLang("en");
+
+applyLang();
 newGame();
 </script>
 </body>
