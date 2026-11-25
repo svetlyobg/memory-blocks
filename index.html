@@ -12,6 +12,7 @@
   @media (max-width: 600px) { body { padding: 6px 4px; } }
   .window { border: 2px solid #000; background: #fff; box-shadow: 4px 4px 0 rgba(0,0,0,.4); }
   .title { background: #0000a8; color: #fff; text-align: center; font-weight: bold; padding: 3px 8px; }
+  #countdown { color: #ffff00; }
   .menubar { display: flex; background: #fff; border-bottom: 1px solid #000; position: relative; }
   .menu { position: relative; padding: 3px 10px; cursor: pointer; }
   .menu:hover, .menu.open { background: #0000a8; color: #fff; }
@@ -51,7 +52,7 @@
 </head>
 <body>
 <div class="window">
-  <div class="title">Memory Blocks</div>
+  <div class="title">Memory Blocks<span id="countdown"></span></div>
   <div class="menubar" id="menubar">
     <div class="menu" data-m="game">Игра
       <div class="dropdown">
@@ -84,9 +85,9 @@
 
 <script>
 const LEVELS = [
-  { name: "Лесно (6×5)",   cols: 6,  rows: 5 },
-  { name: "Средно (8×6)",  cols: 8,  rows: 6 },
-  { name: "Трудно (10×6)", cols: 10, rows: 6 }
+  { name: "Лесно (6×5)",   cols: 6,  rows: 5, preview: 7 },
+  { name: "Средно (8×6)",  cols: 8,  rows: 6, preview: 9 },
+  { name: "Трудно (10×6)", cols: 10, rows: 6, preview: 11 }
 ];
 // 30 различни икони (прости SVG фигури)
 const COLORS = ["#e00","#00a","#080","#f80","#808","#088","#000","#a50","#f0a","#555"];
@@ -167,6 +168,8 @@ function fitBoard() {
 let resizeT;
 window.addEventListener("resize", () => { clearTimeout(resizeT); resizeT = setTimeout(fitBoard, 100); });
 
+let cdTimer = null;
+function showCountdown(s) { $("countdown").textContent = s > 0 ? ` — Запомни! ${s} сек.` : ""; }
 function total() { return LEVELS[level].cols * LEVELS[level].rows / 2; }
 function updateHUD() {
   $("iq").textContent = iq;
@@ -209,6 +212,8 @@ function shuffle(a) {
 
 function newGame() {
   clearInterval(timer);
+  clearInterval(cdTimer);
+  showCountdown(0);
   gid++;
   const g = gid;
   secs = 0; pairs = 0; found = 0; first = null; started = false;
@@ -236,11 +241,21 @@ function newGame() {
     const cells = [...board.children];
     cells.forEach(c => c.classList.add("peek"));
     setLock(true);
-    setTimeout(() => {
+    let left = LEVELS[level].preview;
+    showCountdown(left);
+    cdTimer = setInterval(() => {
       if (g !== gid) return;
-      cells.forEach(c => c.classList.remove("peek"));
-      setLock(false);
-    }, level === 0 ? 3000 : 4000);
+      left--;
+      if (left > 0) {
+        showCountdown(left);
+        if (left <= 3) tone(1000, 0, 0.05, "square", 0.06);
+      } else {
+        clearInterval(cdTimer);
+        showCountdown(0);
+        cells.forEach(c => c.classList.remove("peek"));
+        setLock(false);
+      }
+    }, 1000);
   } else {
     setLock(false);
   }
